@@ -193,14 +193,12 @@ export struct SettingsPanel {
             .onClick(() => {
               void this.doRegister();
             })
-          if (!AuthStore.isGuest()) {
-            Button('退出')
-              .backgroundColor(Theme.card)
-              .fontColor(Theme.ink)
-              .onClick(() => {
-                void AuthStore.logout();
-              })
-          }
+          Button(AuthStore.isGuest() ? '换账号' : '退出')
+            .backgroundColor(Theme.card)
+            .fontColor(Theme.ink)
+            .onClick(() => {
+              void AuthStore.logout();
+            })
         }
         .width('100%')
 
@@ -266,12 +264,20 @@ export struct SettingsPanel {
           })
 
         Text(BuildFlags.allowCleartext()
-          ? '题库站点（本机联调可改成 http://电脑IP:43180）'
+          ? `题库站点（Debug 默认 ${AppConfig.LOCAL_DEBUG_BASE}）`
           : '题库站点（正式版仅支持 https://）').fontSize(12).fontColor(Theme.muted)
-        TextInput({ placeholder: AppConfig.DEFAULT_BASE, text: this.siteBase })
+        TextInput({ placeholder: AppConfig.defaultBase(), text: this.siteBase })
           .onChange((v: string) => {
             this.siteBase = v;
           })
+        if (BuildFlags.allowCleartext()) {
+          Button('填入本机联调地址')
+            .backgroundColor(Theme.card)
+            .fontColor(Theme.ink)
+            .onClick(() => {
+              this.siteBase = AppConfig.LOCAL_DEBUG_BASE;
+            })
+        }
 
         if (this.probe) {
           Text(this.probe).fontSize(12).fontColor(Theme.muted).lineHeight(18)

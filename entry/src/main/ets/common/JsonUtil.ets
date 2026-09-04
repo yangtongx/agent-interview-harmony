@@ -1,6 +1,18 @@
 export function errorMessage(e: Object): string {
+  const rec = e as Record<string, Object>;
+  const code = rec['code'];
+  if (code === 2300997) {
+    return '本机 HTTP 被系统拦了。请用 Debug 重新安装，确认连的是 http://电脑IP:43180。';
+  }
+  if (code === 2300007) {
+    return '连不上电脑上的服务。确认 server 已启动，手机和电脑同一 Wi-Fi，防火墙放行 43180。';
+  }
   if (e instanceof Error) {
     return e.message;
+  }
+  const msg = rec['message'];
+  if (typeof msg === 'string' && msg) {
+    return msg;
   }
   return String(e);
 }

@@ -16,6 +16,7 @@ export class AuthStore {
   static user: AuthUser | null = null;
   static notice: string = '';
   static ready: boolean = false;
+  static entered: boolean = false;
   private static bus: Emitter = new Emitter();
 
   static subscribe(fn: () => void): () => void {
@@ -35,6 +36,21 @@ export class AuthStore {
       return true;
     }
     return AuthStore.user.isGuest;
+  }
+
+  static needsLogin(): boolean {
+    return AuthStore.ready && !AuthStore.entered;
+  }
+
+  static async markEntered(): Promise<void> {
+    AuthStore.entered = true;
+    await PreferencesStore.set(AppConfig.AUTH_ENTERED_PREF, '1');
+    AuthStore.emit();
+  }
+
+  private static async forgetEntered(): Promise<void> {
+    AuthStore.entered = false;
+    await PreferencesStore.set(AppConfig.AUTH_ENTERED_PREF, '');
   }
 
   static async deviceId(): Promise<string> {
@@ -67,35 +83,55 @@ export class AuthStore {
     AuthStore.emit();
   }
 
+  private static async clearSession(): Promise<void> {
+    AppConfig.sessionToken = '';
+    AuthStore.user = null;
+    await SecureStore.set(AppConfig.TOKEN_PREF, '');
+    await PreferencesStore.set(AppConfig.USER_PREF, '');
+    AuthStore.emit();
+  }
+
   static async bootstrap(): Promise<void> {
+    AuthStore.entered = (await PreferencesStore.get(AppConfig.AUTH_ENTERED_PREF, '')) === '1';
+    if (!AuthStore.entered) {
+      AuthStore.ready = true;
+      AuthStore.emit();
+      return;
+    }
     const token = await SecureStore.get(AppConfig.TOKEN_PREF, '');
     const cached = await PreferencesStore.get(AppConfig.USER_PREF, '');
+    let cachedUser: AuthUser | null = null;
     if (cached) {
       try {
-        AuthStore.user = parseAuthUser(JSON.parse(cached) as Object);
-        AuthStore.emit();
+        cachedUser = parseAuthUser(JSON.parse(cached) as Object);
       } catch (e) {
         hilog.error(0x0000, 'Interview', 'auth cache %{public}s', (e as Error).message);
       }
     }
-    AppConfig.sessionToken = token;
+    AppConfig.sessionToken = '';
     try {
-      if (token) {
-        try {
-          const text = await ApiClient.getText('/api/me');
-          const me = parseAuthUser(JSON.parse(text) as Object);
-          await AuthStore.persist(token, me);
-          await AuthStore.syncProgress();
-          await HomeStore.load(me.audience);
-          AuthStore.ready = true;
-          AuthStore.emit();
-          return;
-        } catch (e) {
-          hilog.error(0x0000, 'Interview', 'auth me %{public}s', (e as Error).message);
-          AppConfig.sessionToken = '';
-        }
+      if (!token) {
+        await AuthStore.forgetEntered();
+        return;
       }
-      await AuthStore.deviceLogin(AuthStore.user?.audience ?? 'unset');
+      AppConfig.sessionToken = token;
+      try {
+        const text = await ApiClient.getText('/api/me');
+        const me = parseAuthUser(JSON.parse(text) as Object);
+        await AuthStore.persist(token, me);
+        await AuthStore.syncProgress();
+        await HomeStore.load(me.audience);
+        return;
+      } catch (e) {
+        hilog.error(0x0000, 'Interview', 'auth me %{public}s', (e as Error).message);
+        if (cachedUser) {
+          await AuthStore.persist(token, cachedUser);
+          await HomeStore.load(cachedUser.audience);
+          return;
+        }
+        await AuthStore.clearSession();
+        await AuthStore.forgetEntered();
+      }
     } catch (e) {
       AuthStore.notice = (e as Error).message;
     } finally {
@@ -116,6 +152,7 @@ export class AuthStore {
     await AuthStore.persist(session.token, session.user);
     await AuthStore.syncProgress();
     await HomeStore.load(session.user.audience);
+    await AuthStore.markEntered();
   }
 
   static async syncProgress(): Promise<void> {
@@ -152,6 +189,7 @@ export class AuthStore {
     await AuthStore.persist(session.token, session.user);
     await AuthStore.syncProgress();
     await HomeStore.load(session.user.audience);
+    await AuthStore.markEntered();
   }
 
   static async login(provider: string, uid: string, password: string): Promise<void> {
@@ -167,6 +205,7 @@ export class AuthStore {
     await AuthStore.persist(session.token, session.user);
     await AuthStore.syncProgress();
     await HomeStore.load(session.user.audience);
+    await AuthStore.markEntered();
   }
 
   static async logout(): Promise<void> {
@@ -175,11 +214,10 @@ export class AuthStore {
     } catch (e) {
       hilog.error(0x0000, 'Interview', 'logout %{public}s', (e as Error).message);
     }
-    AppConfig.sessionToken = '';
-    await SecureStore.set(AppConfig.TOKEN_PREF, '');
-    await PreferencesStore.set(AppConfig.USER_PREF, '');
+    await AuthStore.clearSession();
+    await AuthStore.forgetEntered();
     await AuthStore.rotateDevice();
-    await AuthStore.deviceLogin('unset');
     await HomeStore.load('unset');
+    AuthStore.emit();
   }
 }

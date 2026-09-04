@@ -8,6 +8,7 @@ import { LlmStore } from '../store/LlmStore';
 import { ProgressStore } from '../store/ProgressStore';
 import { ResumeStore } from '../store/ResumeStore';
 import { SettingsPanel } from '../components/SettingsPanel';
+import { LoginGate } from '../components/LoginGate';
 import { BankPage } from './BankPage';
 import { ListenPage } from './ListenPage';
 import { MockPage } from './MockPage';
@@ -18,7 +19,20 @@ struct Index {
   @State selectedTab: number = 0;
   @State showSettings: boolean = false;
   @State tick: number = 0;
+  @State authReady: boolean = false;
+  @State needLogin: boolean = false;
+  @State needAudience: boolean = false;
   private unsubs: Array<() => void> = [];
+
+  private pullAuth(): void {
+    this.authReady = AuthStore.ready;
+    this.needLogin = AuthStore.needsLogin();
+    this.needAudience = AuthStore.needsAudience();
+    this.tick++;
+    if (this.needLogin) {
+      this.showSettings = false;
+    }
+  }
 
   aboutToAppear(): void {
     this.unsubs.push(BankStore.subscribe(() => {
@@ -31,11 +45,12 @@ struct Index {
       this.tick++;
     }));
     this.unsubs.push(AuthStore.subscribe(() => {
-      this.tick++;
+      this.pullAuth();
     }));
     this.unsubs.push(HomeStore.subscribe(() => {
       this.tick++;
     }));
+    this.pullAuth();
   }
 
   aboutToDisappear(): void {
@@ -49,77 +64,95 @@ struct Index {
 
   build() {
     Stack() {
-      Column() {
-        this.Header()
-        if (BankStore.loading && BankStore.topics.length === 0) {
-          Column({ space: 8 }) {
-            LoadingProgress().color(Theme.accent).width(36)
-            Text('正在从服务器加载题目…').fontSize(14).fontColor(Theme.muted)
-          }
-          .width('100%')
-          .layoutWeight(1)
-          .justifyContent(FlexAlign.Center)
-        } else if (BankStore.error && BankStore.topics.length === 0) {
-          Column({ space: 12 }) {
-            Text('服务器上的题目没读到')
-              .fontSize(20)
-              .fontWeight(FontWeight.Medium)
-            Text(BankStore.error)
-              .fontSize(14)
-              .lineHeight(22)
-              .fontColor(Theme.muted)
-            Button('再试一次')
-              .backgroundColor(Theme.accent)
-              .onClick(() => {
-                void BankStore.load();
-              })
-          }
-          .width('100%')
-          .padding(24)
-          .layoutWeight(1)
-          .justifyContent(FlexAlign.Center)
-        } else {
-          if (BankStore.fromCache) {
-            Text('当前用的是上次缓存的题库。连上网后点右上角刷新。')
-              .fontSize(12)
-              .fontColor(Theme.accent)
-              .width('100%')
-              .padding({ left: 16, right: 16, top: 4, bottom: 4 })
-          }
-          Tabs({ barPosition: BarPosition.End, index: this.selectedTab }) {
-            TabContent() {
-              BankPage()
-            }
-            .tabBar(this.TabItem('题库', this.selectedTab === 0))
-
-            TabContent() {
-              MockPage()
-            }
-            .tabBar(this.TabItem('模拟', this.selectedTab === 1))
-
-            TabContent() {
-              ListenPage()
-            }
-            .tabBar(this.TabItem('听记', this.selectedTab === 2))
-          }
-          .barMode(BarMode.Fixed)
-          .barHeight(56)
-          .barBackgroundColor(Theme.card)
-          .onChange((i: number) => {
-            this.selectedTab = i;
-            ttsService.stop();
-            void asrService.stop();
-          })
-          .layoutWeight(1)
-          .width('100%')
+      if (!this.authReady) {
+        Column({ space: 8 }) {
+          LoadingProgress().color(Theme.accent).width(36)
+          Text('正在打开面试舱…').fontSize(14).fontColor(Theme.muted)
         }
-      }
-      .width('100%')
-      .height('100%')
-      .backgroundColor(Theme.paper)
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.Center)
+        .backgroundColor(Theme.paper)
+      } else if (this.needLogin) {
+        LoginGate()
+      } else {
+        Stack() {
+          Column() {
+            this.Header()
+          if (BankStore.loading && BankStore.topics.length === 0) {
+            Column({ space: 8 }) {
+              LoadingProgress().color(Theme.accent).width(36)
+              Text('正在从服务器加载题目…').fontSize(14).fontColor(Theme.muted)
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
+          } else if (BankStore.error && BankStore.topics.length === 0) {
+            Column({ space: 12 }) {
+              Text('服务器上的题目没读到')
+                .fontSize(20)
+                .fontWeight(FontWeight.Medium)
+              Text(BankStore.error)
+                .fontSize(14)
+                .lineHeight(22)
+                .fontColor(Theme.muted)
+              Button('再试一次')
+                .backgroundColor(Theme.accent)
+                .onClick(() => {
+                  void BankStore.load();
+                })
+            }
+            .width('100%')
+            .padding(24)
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
+          } else {
+            if (BankStore.fromCache) {
+              Text('当前用的是上次缓存的题库。连上网后点右上角刷新。')
+                .fontSize(12)
+                .fontColor(Theme.accent)
+                .width('100%')
+                .padding({ left: 16, right: 16, top: 4, bottom: 4 })
+            }
+            Tabs({ barPosition: BarPosition.End, index: this.selectedTab }) {
+              TabContent() {
+                BankPage()
+              }
+              .tabBar(this.TabItem('题库', this.selectedTab === 0))
 
-      if (AuthStore.needsAudience()) {
-        this.AudienceMask()
+              TabContent() {
+                MockPage()
+              }
+              .tabBar(this.TabItem('模拟', this.selectedTab === 1))
+
+              TabContent() {
+                ListenPage()
+              }
+              .tabBar(this.TabItem('听记', this.selectedTab === 2))
+            }
+            .barMode(BarMode.Fixed)
+            .barHeight(56)
+            .barBackgroundColor(Theme.card)
+            .onChange((i: number) => {
+              this.selectedTab = i;
+              ttsService.stop();
+              void asrService.stop();
+            })
+            .layoutWeight(1)
+            .width('100%')
+          }
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor(Theme.paper)
+        .id(`main-${this.tick}`)
+
+        if (this.needAudience) {
+          this.AudienceMask()
+        }
+        }
+        .width('100%')
+        .height('100%')
       }
     }
     .width('100%')

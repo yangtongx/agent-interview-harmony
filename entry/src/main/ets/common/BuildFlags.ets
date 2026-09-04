@@ -1,22 +1,13 @@
-import { bundleManager } from '@kit.AbilityKit';
+import BuildProfile from 'BuildProfile';
 
 export class BuildFlags {
-  private static resolved: boolean = false;
-  private static value: boolean = false;
-
   static allowCleartext(): boolean {
-    if (BuildFlags.resolved) {
-      return BuildFlags.value;
+    if (BuildProfile.DEBUG === true) {
+      return true;
     }
-    try {
-      const info = bundleManager.getBundleInfoForSelfSync(
-        bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION
-      );
-      BuildFlags.value = info.appInfo.debug === true;
-      BuildFlags.resolved = true;
-    } catch (_e) {
-      return false;
+    if (BuildProfile.BUILD_MODE_NAME === 'debug') {
+      return true;
     }
-    return BuildFlags.value;
+    return false;
   }
 }

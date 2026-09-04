@@ -1,7 +1,8 @@
 import { http } from '@kit.NetworkKit';
 import { util } from '@kit.ArkTS';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppConfig } from '../common/AppConfig';
-import { asBool, asRecord, asString } from '../common/JsonUtil';
+import { asBool, asRecord, asString, errorMessage } from '../common/JsonUtil';
 import { JudgeResult, LlmSettings, Question, Topic } from '../model/Types';
 import { parseJudge } from '../model/Parse';
 import { fullAnswerText } from '../utils/QuestionTree';
@@ -20,7 +21,7 @@ export class BankFetch {
 
 export class ApiClient {
   static baseUrl(): string {
-    return AppConfig.currentBase || AppConfig.DEFAULT_BASE;
+    return AppConfig.currentBase || AppConfig.defaultBase();
   }
 
   static join(path: string): string {
@@ -62,7 +63,9 @@ export class ApiClient {
         connectTimeout: AppConfig.CONNECT_TIMEOUT,
         readTimeout: AppConfig.READ_TIMEOUT
       });
+      const url = ApiClient.join(path);
       const text = `${res.result ?? ''}`;
+      ApiClient.note('GET', url, res.responseCode);
       if (res.responseCode < 200 || res.responseCode >= 300) {
         throw new Error(ApiClient.errorFromBody(text, res.responseCode));
       }
@@ -93,7 +96,8 @@ export class ApiClient {
     try {
       const header = ApiClient.jsonHeaders();
       header['Content-Type'] = 'application/json';
-      const res = await client.request(ApiClient.join(path), {
+      const url = ApiClient.join(path);
+      const res = await client.request(url, {
         method: method,
         header: header,
         extraData: JSON.stringify(body),
@@ -102,10 +106,15 @@ export class ApiClient {
         readTimeout: AppConfig.READ_TIMEOUT
       });
       const text = `${res.result ?? ''}`;
+      ApiClient.note(method === http.RequestMethod.POST ? 'POST' : 'PUT', url, res.responseCode);
       if (res.responseCode < 200 || res.responseCode >= 300) {
         throw new Error(ApiClient.errorFromBody(text, res.responseCode));
       }
       return text;
+    } catch (e) {
+      const err = e as Object;
+      ApiClient.noteFail(method === http.RequestMethod.POST ? 'POST' : 'PUT', ApiClient.join(path), err);
+      throw new Error(errorMessage(err));
     } finally {
       client.destroy();
     }
@@ -128,7 +137,8 @@ export class ApiClient {
       if (etag) {
         header['If-None-Match'] = etag;
       }
-      const res = await client.request(ApiClient.join('/api/bank'), {
+      const url = ApiClient.join('/api/bank');
+      const res = await client.request(url, {
         method: http.RequestMethod.GET,
         header: header,
         expectDataType: http.HttpDataType.STRING,
@@ -136,6 +146,7 @@ export class ApiClient {
         readTimeout: AppConfig.READ_TIMEOUT
       });
       const nextEtag = ApiClient.headerValue(res, 'etag');
+      ApiClient.note('GET', url, res.responseCode);
       const out = new BankFetch();
       out.etag = nextEtag || etag;
       if (res.responseCode === 304) {
@@ -215,7 +226,8 @@ export class ApiClient {
           remoteFileName: fileName
         }
       ];
-      const res = await client.request(ApiClient.join('/api/resumes'), {
+      const url = ApiClient.join('/api/resumes');
+      const res = await client.request(url, {
         method: http.RequestMethod.POST,
         header: ApiClient.jsonHeaders(),
         multiFormDataList: forms,
@@ -224,6 +236,7 @@ export class ApiClient {
         readTimeout: AppConfig.READ_TIMEOUT
       });
       const text = `${res.result ?? ''}`;
+      ApiClient.note('POST', url, res.responseCode);
       if (res.responseCode < 200 || res.responseCode >= 300) {
         throw new Error(ApiClient.errorFromBody(text, res.responseCode));
       }
@@ -281,7 +294,8 @@ export class ApiClient {
       if (settings.apiKey.trim()) {
         body['apiKey'] = settings.apiKey.trim();
       }
-      const res = await client.request(ApiClient.join('/api/tts'), {
+      const url = ApiClient.join('/api/tts');
+      const res = await client.request(url, {
         method: http.RequestMethod.POST,
         header: ApiClient.ttsHeaders(),
         extraData: JSON.stringify(body),
@@ -290,6 +304,7 @@ export class ApiClient {
         readTimeout: AppConfig.READ_TIMEOUT
       });
       const mime = ApiClient.headerValue(res, 'content-type').toLowerCase();
+      ApiClient.note('POST', url, res.responseCode);
       if (mime.includes('application/json')) {
         const raw = bufferToString(res.result as ArrayBuffer);
         throw new Error(ApiClient.errorFromBody(raw, res.responseCode));
@@ -344,7 +359,8 @@ export class ApiClient {
           contentType: 'text/plain'
         });
       }
-      const res = await client.request(ApiClient.join('/api/transcribe'), {
+      const url = ApiClient.join('/api/transcribe');
+      const res = await client.request(url, {
         method: http.RequestMethod.POST,
         header: ApiClient.jsonHeaders(),
         multiFormDataList: forms,
@@ -353,6 +369,7 @@ export class ApiClient {
         readTimeout: AppConfig.READ_TIMEOUT
       });
       const text = `${res.result ?? ''}`;
+      ApiClient.note('POST', url, res.responseCode);
       if (res.responseCode < 200 || res.responseCode >= 300) {
         throw new Error(ApiClient.errorFromBody(text, res.responseCode));
       }
@@ -383,6 +400,16 @@ export class ApiClient {
     return '';
   }
 
+  private static note(method: string, url: string, status: number): void {
+    hilog.info(0x0000, 'Interview', 'http %{public}s %{public}s -> %{public}d', method, url, status);
+  }
+
+  private static noteFail(method: string, url: string, e: Object): void {
+    const rec = e as Record<string, Object>;
+    hilog.error(0x0000, 'Interview', 'http %{public}s %{public}s fail %{public}s %{public}s',
+      method, url, `${rec['code'] ?? ''}`, errorMessage(e));
+  }
+
   private static errorFromBody(text: string, status: number): string {
     try {
       const row = asRecord(JSON.parse(text) as Object);
@@ -395,7 +422,11 @@ export class ApiClient {
       }
     } catch (_e) {
     }
-    return `请求失败 HTTP ${status}`;
+    const lower = text.trim().toLowerCase();
+    if (lower.startsWith('<!doctype') || lower.includes('<html')) {
+      return `打到了网页而不是接口（HTTP ${status}）。当前站点 ${ApiClient.baseUrl()}`;
+    }
+    return `请求失败 HTTP ${status}，当前站点 ${ApiClient.baseUrl()}`;
   }
 }
 

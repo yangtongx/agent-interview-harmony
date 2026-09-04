@@ -2,12 +2,15 @@ import { BuildFlags } from './BuildFlags';
 
 export class AppConfig {
   static readonly DEFAULT_BASE: string = 'https://www.xiaoyangtx.cloud';
+  /** Debug HAP default. Phone must reach this PC on the same LAN; change if DHCP moves. */
+  static readonly LOCAL_DEBUG_BASE: string = 'http://192.168.43.77:43180';
   static readonly BASE_PREF: string = 'api_base_url';
   static readonly LLM_PREF: string = 'ali-agent-interview-llm';
   static readonly MASTERED_PREF: string = 'ali-agent-interview-mastered';
   static readonly TOKEN_PREF: string = 'auth_token';
   static readonly DEVICE_PREF: string = 'device_id';
   static readonly USER_PREF: string = 'auth_user';
+  static readonly AUTH_ENTERED_PREF: string = 'auth_entered';
   static readonly BANK_CACHE: string = 'bank-cache.json';
   static readonly BANK_ETAG: string = 'bank-cache.etag';
   static readonly CONNECT_TIMEOUT: number = 30000;
@@ -21,9 +24,25 @@ export class AppConfig {
     return trimmed.startsWith('https://') && trimmed.length > 8;
   }
 
+  static defaultBase(): string {
+    return BuildFlags.allowCleartext() ? AppConfig.LOCAL_DEBUG_BASE : AppConfig.DEFAULT_BASE;
+  }
+
+  static isProductionBase(url: string): boolean {
+    return url.trim().replace(/\/+$/, '').toLowerCase() === AppConfig.DEFAULT_BASE.toLowerCase();
+  }
+
+  static resolveApiBase(stored: string): string {
+    const raw = stored.trim();
+    if (!raw || (BuildFlags.allowCleartext() && AppConfig.isProductionBase(raw))) {
+      return AppConfig.defaultBase();
+    }
+    return AppConfig.normalizeApiBase(raw);
+  }
+
   static normalizeApiBase(url: string): string {
     const trimmed = url.trim().replace(/\/+$/, '');
-    const next = trimmed ? trimmed : AppConfig.DEFAULT_BASE;
+    const next = trimmed ? trimmed : AppConfig.defaultBase();
     const lower = next.toLowerCase();
     if (lower.startsWith('https://') && next.length > 8) {
       return next;

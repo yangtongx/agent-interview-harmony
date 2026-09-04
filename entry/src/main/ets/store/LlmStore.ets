@@ -37,16 +37,16 @@ export class LlmStore {
       await SecureStore.set('llm_api_key', LlmStore.settings.apiKey);
       await LlmStore.persistPublic();
     }
-    const base = await PreferencesStore.get(AppConfig.BASE_PREF, AppConfig.DEFAULT_BASE);
+    const base = await PreferencesStore.get(AppConfig.BASE_PREF, '');
     try {
-      LlmStore.apiBase = AppConfig.normalizeApiBase(base);
+      LlmStore.apiBase = AppConfig.resolveApiBase(base);
     } catch (e) {
       hilog.error(0x0000, 'Interview', 'api base %{public}s', (e as Error).message);
-      LlmStore.apiBase = AppConfig.DEFAULT_BASE;
+      LlmStore.apiBase = AppConfig.defaultBase();
     }
     AppConfig.currentBase = LlmStore.apiBase;
-    LlmStore.serverConfigured = await ApiClient.getJudgeConfigured();
     LlmStore.emit();
+    void LlmStore.refreshServer();
   }
 
   private static async persistPublic(): Promise<void> {
