@@ -4,9 +4,9 @@
 
 配套目录（都在 `D:\work` 下，互不嵌套）：
 
-- 网页：`ali-agent-interview`
-- 服务端：`ali-agent-interview-server`
-- 本工程：`ali-agent-interview-harmony`
+- 网页：`agent-interview`
+- 服务端：`agent-interview-server`
+- 本工程：`agent-interview-harmony`
 
 ## 你需要准备
 
@@ -16,7 +16,7 @@
 
 ## 打开工程
 
-1. DevEco Studio → Open → 选本目录（`ali-agent-interview-harmony` 根目录）
+1. DevEco Studio → Open → 选本目录（`agent-interview-harmony` 根目录）
 2. 等 SDK 与 `oh_modules` 同步
 3. File → Project Structure 里给 `default` 配调试签名（本仓库不提交证书）
 4. 连真机，Run `entry`
@@ -50,7 +50,7 @@
 
 ## 本机联调
 
-在 `ali-agent-interview-server` 里启动 Python 服务（默认 `:43180`）：
+在 `agent-interview-server` 里启动 Python 服务（默认 `:43180`）：
 
 ```bash
 python -m server
