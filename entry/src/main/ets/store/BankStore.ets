@@ -19,6 +19,7 @@ export class BankStore {
   static ailianIntro: AilianIntro = new AilianIntro();
   static candidate: CandidateProfile | null = null;
   static stats: BankStats = new BankStats();
+  static releaseVersion: string = '';
   static byId: Map<string, Question> = new Map();
   static topicById: Map<string, Topic> = new Map();
   private static bus: Emitter = new Emitter();
@@ -59,9 +60,24 @@ export class BankStore {
     BankStore.error = '';
     BankStore.emit();
     try {
-      const text = await ApiClient.fetchBank();
-      BankStore.applyJson(text, false);
-      await BankStore.writeCache(text);
+      const etag = await BankStore.readEtag();
+      const fetched = await ApiClient.fetchBank(etag);
+      if (fetched.notModified) {
+        const cached = await BankStore.readCache();
+        if (cached) {
+          BankStore.applyJson(cached, true);
+          BankStore.error = '';
+          return;
+        }
+        const fresh = await ApiClient.fetchBank('');
+        BankStore.applyJson(fresh.body, false);
+        await BankStore.writeCache(fresh.body);
+        await BankStore.writeEtag(fresh.etag);
+        return;
+      }
+      BankStore.applyJson(fetched.body, false);
+      await BankStore.writeCache(fetched.body);
+      await BankStore.writeEtag(fetched.etag);
     } catch (e) {
       const cached = await BankStore.readCache();
       if (cached) {
@@ -87,6 +103,7 @@ export class BankStore {
     BankStore.ailianIntro = parsed.ailianIntro;
     BankStore.candidate = parsed.candidate;
     BankStore.stats = parsed.stats;
+    BankStore.releaseVersion = parsed.releaseVersion;
     BankStore.fromCache = cached;
     BankStore.byId = new Map();
     BankStore.topicById = new Map();
@@ -107,6 +124,14 @@ export class BankStore {
     return `${dir}/${AppConfig.BANK_CACHE}`;
   }
 
+  private static etagPath(): string {
+    const dir = AppContextHolder.filesDir();
+    if (!dir) {
+      return '';
+    }
+    return `${dir}/${AppConfig.BANK_ETAG}`;
+  }
+
   private static async writeCache(text: string): Promise<void> {
     const path = BankStore.cachePath();
     if (!path) {
@@ -118,6 +143,38 @@ export class BankStore {
       fs.closeSync(file);
     } catch (e) {
       hilog.error(0x0000, 'Interview', 'bank cache write %{public}s', (e as Error).message);
+    }
+  }
+
+  private static async writeEtag(etag: string): Promise<void> {
+    const path = BankStore.etagPath();
+    if (!path || !etag) {
+      return;
+    }
+    try {
+      const file = fs.openSync(path, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+      fs.writeSync(file.fd, etag);
+      fs.closeSync(file);
+    } catch (e) {
+      hilog.error(0x0000, 'Interview', 'bank etag write %{public}s', (e as Error).message);
+    }
+  }
+
+  private static async readEtag(): Promise<string> {
+    const path = BankStore.etagPath();
+    if (!path) {
+      return '';
+    }
+    try {
+      const file = fs.openSync(path, fs.OpenMode.READ_ONLY);
+      const stat = fs.statSync(path);
+      const buf = new ArrayBuffer(stat.size);
+      fs.readSync(file.fd, buf);
+      fs.closeSync(file);
+      const decoder = util.TextDecoder.create('utf-8');
+      return decoder.decodeToString(new Uint8Array(buf)).trim();
+    } catch (_e) {
+      return '';
     }
   }
 

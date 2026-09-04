@@ -6,6 +6,18 @@ import { JudgeResult, LlmSettings, Question, Topic } from '../model/Types';
 import { parseJudge } from '../model/Parse';
 import { fullAnswerText } from '../utils/QuestionTree';
 
+export class TtsBinary {
+  bytes: Uint8Array = new Uint8Array();
+  mime: string = 'audio/mpeg';
+  engine: string = '';
+}
+
+export class BankFetch {
+  notModified: boolean = false;
+  body: string = '';
+  etag: string = '';
+}
+
 export class ApiClient {
   static baseUrl(): string {
     return AppConfig.currentBase || AppConfig.DEFAULT_BASE;
@@ -109,8 +121,36 @@ export class ApiClient {
     }
   }
 
-  static async fetchBank(): Promise<string> {
-    return ApiClient.getText('/api/bank');
+  static async fetchBank(etag: string = ''): Promise<BankFetch> {
+    const client = http.createHttp();
+    try {
+      const header = ApiClient.jsonHeaders();
+      if (etag) {
+        header['If-None-Match'] = etag;
+      }
+      const res = await client.request(ApiClient.join('/api/bank'), {
+        method: http.RequestMethod.GET,
+        header: header,
+        expectDataType: http.HttpDataType.STRING,
+        connectTimeout: AppConfig.CONNECT_TIMEOUT,
+        readTimeout: AppConfig.READ_TIMEOUT
+      });
+      const nextEtag = ApiClient.headerValue(res, 'etag');
+      const out = new BankFetch();
+      out.etag = nextEtag || etag;
+      if (res.responseCode === 304) {
+        out.notModified = true;
+        return out;
+      }
+      const text = `${res.result ?? ''}`;
+      if (res.responseCode < 200 || res.responseCode >= 300) {
+        throw new Error(ApiClient.errorFromBody(text, res.responseCode));
+      }
+      out.body = text;
+      return out;
+    } finally {
+      client.destroy();
+    }
   }
 
   static async judge(question: Question, topic: Topic, userAnswer: string, settings: LlmSettings): Promise<JudgeResult> {
@@ -357,12 +397,6 @@ export class ApiClient {
     }
     return `请求失败 HTTP ${status}`;
   }
-}
-
-export class TtsBinary {
-  bytes: Uint8Array = new Uint8Array();
-  mime: string = 'audio/mpeg';
-  engine: string = '';
 }
 
 function bufferToString(buf: ArrayBuffer): string {

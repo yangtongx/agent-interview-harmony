@@ -9,6 +9,7 @@ export class AppConfig {
   static readonly DEVICE_PREF: string = 'device_id';
   static readonly USER_PREF: string = 'auth_user';
   static readonly BANK_CACHE: string = 'bank-cache.json';
+  static readonly BANK_ETAG: string = 'bank-cache.etag';
   static readonly CONNECT_TIMEOUT: number = 30000;
   static readonly READ_TIMEOUT: number = 120000;
   static readonly MAX_TTS_CHARS: number = 560;

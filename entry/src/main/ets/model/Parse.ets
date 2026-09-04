@@ -65,6 +65,7 @@ export class ParsedBank {
   ailianIntro: AilianIntro = new AilianIntro();
   candidate: CandidateProfile | null = null;
   stats: BankStats = new BankStats();
+  releaseVersion: string = '';
 }
 
 export function parseBank(text: string): ParsedBank {
@@ -112,6 +113,10 @@ export function parseBank(text: string): ParsedBank {
   }
   if (bank.questions.length === 0 || bank.topics.length === 0) {
     throw new Error('题库接口返回的数据不完整。');
+  }
+  const releaseRaw = root['release'];
+  if (releaseRaw && typeof releaseRaw === 'object') {
+    bank.releaseVersion = asString(asRecord(releaseRaw as Object)['version']);
   }
   return bank;
 }
