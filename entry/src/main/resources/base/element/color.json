@@ -1,0 +1,13 @@
+{
+  "color": [
+    { "name": "start_window_background", "value": "#F6F0E6" },
+    { "name": "paper", "value": "#F6F0E6" },
+    { "name": "card", "value": "#FFFDF8" },
+    { "name": "ink", "value": "#1C1410" },
+    { "name": "muted", "value": "#7A6F66" },
+    { "name": "accent", "value": "#E24A16" },
+    { "name": "accent_soft", "value": "#FBE4D6" },
+    { "name": "emerald", "value": "#0F7A5A" },
+    { "name": "danger", "value": "#C43C2C" }
+  ]
+}

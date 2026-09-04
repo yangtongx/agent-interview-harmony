@@ -1,0 +1,8 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "Agent 面试舱题库" },
+    { "name": "EntryAbility_desc", "value": "面试练习入口" },
+    { "name": "EntryAbility_label", "value": "Agent 面试舱" },
+    { "name": "perm_microphone", "value": "用于口述答题，并把语音转成文字交给面试官点评" }
+  ]
+}

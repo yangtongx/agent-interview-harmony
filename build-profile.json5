@@ -1,0 +1,56 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\爱连国际\\.ohos\\config\\default_ali-agent-interview-harmony_JWWwcTXw1yAoNQFHhXVyI-bf_EoXKNjz-c6EO0HNqEs=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B262ECC4D75CA0D25C41E8A77E4A2A6DD13BC571D5A22EB95E1B16E121D827CC8FBB8F58D3A9855",
+          "profile": "C:\\Users\\爱连国际\\.ohos\\config\\default_ali-agent-interview-harmony_JWWwcTXw1yAoNQFHhXVyI-bf_EoXKNjz-c6EO0HNqEs=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\爱连国际\\.ohos\\config\\default_ali-agent-interview-harmony_JWWwcTXw1yAoNQFHhXVyI-bf_EoXKNjz-c6EO0HNqEs=.p12",
+          "storePassword": "0000001B8AF7DF26541942837F5B563EFB364331FBA4BF30EA2016E2370162E80C110513A749CF6E21075B"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "compatibleSdkVersion": "6.0.0(20)",
+        "targetSdkVersion": "6.0.2(22)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug"
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}
